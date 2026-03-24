@@ -264,7 +264,7 @@ def render():
         tile("Space Weather Monitoring", "graphics/space_weather.jpg", "space_weather")
 
     with t2:
-        tile("Orbital Debris Reentry Monitoring", "graphics/reentry.jpg", "reentry")
+        tile("Orbital Debris Reentry", "graphics/reentry.jpg", "reentry")
 
     t3, t4 = st.columns(2)
 
