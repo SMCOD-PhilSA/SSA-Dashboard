@@ -12,65 +12,67 @@ def safe_json(url):
         return []
 
 
+def classify_kp(kp):
+    if kp < 3:
+        return "Quiet"
+    elif kp < 5:
+        return "Unsettled"
+    elif kp < 6:
+        return "Minor Storm"
+    elif kp < 7:
+        return "Moderate Storm"
+    elif kp < 8:
+        return "Strong Storm"
+    return "Severe Storm"
+
+
 def get_kp_index():
-    url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+    url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"
     data = safe_json(url)
 
-    if not data or len(data) < 2:
+    if not data:
         return {"kp": "N/A", "status": "No Data"}
 
     try:
         latest = data[-1]
-        kp = float(latest[1])
+        kp = float(latest["kp"])
     except Exception:
         return {"kp": "N/A", "status": "No Data"}
 
-    if kp < 3:
-        status = "Quiet"
-    elif kp < 5:
-        status = "Unsettled"
-    elif kp < 6:
-        status = "Minor Storm"
-    elif kp < 7:
-        status = "Moderate Storm"
-    elif kp < 8:
-        status = "Strong Storm"
-    else:
-        status = "Severe Storm"
-
-    return {"kp": kp, "status": status}
+    return {"kp": kp, "status": classify_kp(kp)}
 
 
 def get_daily_kp():
     url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"
     data = safe_json(url)
 
-    if not data or len(data) < 2:
-        return [], []
+    if not data:
+        return ["No Data"], [0]
 
     today = date.today()
-    history_start = today - timedelta(days=7)
-    forecast_end = today + timedelta(days=2)
+    start_date = today - timedelta(days=7)
+    end_date = today + timedelta(days=2)
 
     daily = defaultdict(list)
 
-    for row in data[1:]:
+    for row in data:
         try:
-            time_tag = row[0]
-            kp = float(row[1])
-            dt = datetime.strptime(time_tag, "%Y-%m-%d %H:%M:%S")
+            dt = datetime.strptime(row["time_tag"], "%Y-%m-%dT%H:%M:%S")
             d = dt.date()
 
-            if history_start <= d <= forecast_end:
+            if start_date <= d <= end_date:
+                kp = float(row["kp"])
                 daily[d].append(kp)
+
         except Exception:
             continue
 
     if not daily:
-        return [], []
+        return ["No Data"], [0]
 
     ordered_days = sorted(daily.keys())
+
     labels = [d.strftime("%b %d") for d in ordered_days]
-    values = [sum(daily[d]) / len(daily[d]) for d in ordered_days]
+    values = [round(sum(daily[d]) / len(daily[d]), 2) for d in ordered_days]
 
     return labels, values
