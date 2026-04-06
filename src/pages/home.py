@@ -20,67 +20,33 @@ def tile(title, image_path, page_key, height=220):
 
     components.html(
         f"""
-        <!DOCTYPE html>
         <html>
-        <head>
         <style>
-          * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-
-          html, body {{
-            width: 100%;
-            height: {height}px;
-            background: transparent;
-            overflow: hidden;
-          }}
-
-          .tile {{
-            width: 100%;
-            height: {height}px;
-            border-radius: 14px;
-            border: 1.5px solid rgba(255, 255, 255, 0.25);
-            overflow: hidden;
-            position: relative;
-            background-image: url('data:{mime};base64,{img_b64}');
-            background-size: cover;
-            background-position: center;
-          }}
-
-          .overlay {{
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(
-              to bottom,
-              rgba(0,0,0,0.0) 30%,
-              rgba(0,0,0,0.75) 100%
-            );
-          }}
-
-          .label {{
-            position: absolute;
-            bottom: 14px;
-            left: 16px;
-            color: white;
-            font-size: 15px;
-            font-weight: 600;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            text-shadow: 0 1px 6px rgba(0,0,0,0.8);
-            z-index: 2;
-          }}
+        body {{margin:0;overflow:hidden;}}
+        .tile {{
+            height:{height}px;
+            border-radius:14px;
+            background-image:url("data:{mime};base64,{img_b64}");
+            background-size:cover;
+            background-position:center;
+            position:relative;
+        }}
+        .overlay {{
+            position:absolute;
+            inset:0;
+            background:linear-gradient(to bottom, rgba(0,0,0,0.0), rgba(0,0,0,0.75));
+        }}
         </style>
-        </head>
         <body>
-          <div class="tile">
-            <div class="overlay"></div>
-            <div class="label">{title}</div>
-          </div>
+            <div class="tile">
+                <div class="overlay"></div>
+            </div>
         </body>
         </html>
         """,
-        height=height + 2,
-        scrolling=False,
+        height=height,
     )
 
-    # BUTTON BELOW TILE (THIS IS THE FIX)
     if st.button(f"Open {title}", key=f"btn_{page_key}", use_container_width=True):
         st.query_params["page"] = page_key
         st.session_state["page"] = page_key
@@ -90,132 +56,114 @@ def tile(title, image_path, page_key, height=220):
 def clean_rocket_name(text):
     if not text:
         return "TBD"
-    text = text.replace("\n", " ").strip()
-    keywords_to_remove = ["Unknown Payload", "Demo Flight", "Chang'e 7", "Chang'e"]
-    for k in keywords_to_remove:
-        text = text.replace(k, "").strip()
-    import re
-    match = re.search(r"(Long March\s?[0-9A-Za-z\/\-]+)", text)
-    if match:
-        return match.group(1)
-    return text
+    for k in ["Unknown Payload", "Demo Flight", "Chang'e"]:
+        text = text.replace(k, "")
+    return text.strip()
 
 
 def render():
-    st.markdown(
-        """
-        <style>
-        .block-container {
-            padding-top: 0.1rem !important;
-            padding-bottom: 0rem !important;
-        }
-        h3 {
-            margin-top: 0rem !important;
-            margin-bottom: 0.25rem !important;
-            font-size: 18px !important;
-            font-weight: 700 !important;
-        }
-        div[data-testid="stHorizontalBlock"] {
-            gap: 1rem !important;
-        }
-        iframe {
-            border: none !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("""
+    <style>
+    .block-container { padding-top:0.1rem !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
-    if "page" not in st.session_state:
-        st.session_state["page"] = "home"
-
-    page_from_query = st.query_params.get("page", None)
-    if page_from_query and page_from_query != st.session_state.get("page"):
-        st.session_state["page"] = page_from_query
-        st.rerun()
+    FIG_SIZE = (8, 4)
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("<h3>Geomagnetic Storm Forecast</h3>", unsafe_allow_html=True)
-        try:
-            days, values = get_daily_kp()
-            if values:
-                fig, ax = plt.subplots(figsize=(6, 3))
-                bars = ax.bar(days, values)
+        st.markdown("### Geomagnetic Storm Forecast")
+        days, values = get_daily_kp()
 
-                colors = []
-                for v in values:
-                    if v < 3:
-                        colors.append("green")
-                    elif v < 5:
-                        colors.append("yellow")
-                    elif v < 7:
-                        colors.append("orange")
-                    else:
-                        colors.append("red")
+        if values:
+            fig, ax = plt.subplots(figsize=FIG_SIZE)
 
-                for bar, c in zip(bars, colors):
-                    bar.set_color(c)
+            x = list(range(len(values)))
+            bars = ax.bar(x, values)
 
-                ax.set_ylabel("Kp Index")
-                ax.set_ylim(0, 9)
+            colors = [
+                "green" if v < 3 else
+                "yellow" if v < 5 else
+                "orange" if v < 7 else
+                "red"
+                for v in values
+            ]
 
-                for i, v in enumerate(values):
-                    ax.text(i, v + 0.15, f"{v:.1f}", ha="center", fontsize=8)
+            for b, c in zip(bars, colors):
+                b.set_color(c)
 
-                plt.tight_layout()
-                st.pyplot(fig, width="stretch")
-            else:
-                st.warning("No Kp data available.")
-        except Exception as e:
-            st.error(str(e))
+            ax.set_ylabel("Kp Index")
+            ax.set_xticks(x)
+            ax.set_xticklabels(days, rotation=30, ha="right")
+            ax.set_ylim(0, 9)
+            ax.set_xlim(-0.5, len(values) - 0.5)
+
+            for i, v in enumerate(values):
+                ax.text(i, v + 0.2, f"{v:.1f}", ha="center", fontsize=8)
+
+            from matplotlib.patches import Patch
+            ax.legend(handles=[
+                Patch(color="green", label="Quiet (<3)"),
+                Patch(color="yellow", label="Unsettled (3–4)"),
+                Patch(color="orange", label="Active (5–6)"),
+                Patch(color="red", label="Storm (≥7)")
+            ], fontsize=8)
+
+            fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.25)
+
+            st.pyplot(fig, use_container_width=True)
 
     with col2:
-        st.markdown("<h3>Countries by Active LEO Satellites</h3>", unsafe_allow_html=True)
-        try:
-            labels, values, error = get_active_leo_by_country()
-            if error:
-                st.error(error)
-            elif values:
-                fig2, ax2 = plt.subplots(figsize=(6, 3))
-                ax2.barh(labels, values)
-                plt.tight_layout()
-                st.pyplot(fig2, width="stretch")
-            else:
-                st.warning("No satellite data available.")
-        except Exception as e:
-            st.error(str(e))
+        st.markdown("### Countries by Active LEO Satellites")
+        labels, values, error = get_active_leo_by_country()
 
-    launch_col1, launch_col2 = st.columns(2)
+        if values:
+            fig2, ax2 = plt.subplots(figsize=FIG_SIZE)
 
-    with launch_col1:
-        st.markdown("<h3>Upcoming Launches</h3>", unsafe_allow_html=True)
-        try:
-            launches, error = fetch_china_launches()
-            if error:
-                st.error(error)
-            elif launches:
-                fig3, ax3 = plt.subplots(figsize=(6, 3))
-                ax3.axis("off")
+            ax2.barh(labels, values)
+            ax2.set_xlabel("Number of Satellites")
 
-                for i, launch in enumerate(launches[:4]):
-                    y = 0.85 - i * 0.22
-                    ax3.text(0.03, y, clean_rocket_name(launch.get("rocket")),
-                             transform=ax3.transAxes)
-                    ax3.text(0.03, y - 0.07, launch.get("date") or "TBD",
-                             transform=ax3.transAxes)
-                    ax3.text(0.03, y - 0.13, launch.get("site") or "TBD",
-                             transform=ax3.transAxes)
+            max_val = max(values)
+            ax2.set_xlim(0, max_val * 1.15)
 
-                plt.tight_layout()
-                st.pyplot(fig3, width="stretch")
-            else:
-                st.warning("No upcoming launches")
-        except Exception as e:
-            st.error(str(e))
+            for i, v in enumerate(values):
+                ax2.text(v + max_val * 0.02, i, str(v), va="center", fontsize=9)
 
-    with launch_col2:
+            fig2.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.25)
+
+            st.pyplot(fig2, use_container_width=True)
+
+    l1, l2 = st.columns(2)
+
+    with l1:
+        st.markdown("### Upcoming Launches")
+        launches, error = fetch_china_launches()
+
+        if launches:
+            fig3, ax3 = plt.subplots(figsize=FIG_SIZE)
+            ax3.axis("off")
+
+            y = 0.9
+
+            for i, launch in enumerate(launches[:4]):
+                rocket = clean_rocket_name(launch.get("rocket"))
+                date = launch.get("date") or "TBD"
+                site = launch.get("site") or "TBD"
+
+                ax3.text(0.02, y, rocket, fontsize=12, fontweight="bold", transform=ax3.transAxes)
+                ax3.text(0.02, y - 0.07, date, fontsize=10, transform=ax3.transAxes)
+                ax3.text(0.02, y - 0.13, site, fontsize=9, color="#444", transform=ax3.transAxes)
+
+                if i < 3:
+                    ax3.plot([0.02, 0.98], [y - 0.17, y - 0.17],
+                             transform=ax3.transAxes, color="#cccccc", linewidth=1)
+
+                y -= 0.23
+
+            st.pyplot(fig3, use_container_width=True)
+
+    with l2:
         st.empty()
 
     t1, t2 = st.columns(2)
