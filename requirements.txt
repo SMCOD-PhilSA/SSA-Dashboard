@@ -1,4 +1,12 @@
 streamlit
 requests
+numpy
 matplotlib
+pandas
+python-dotenv
 beautifulsoup4
+lxml
+skyfield
+cartopy
+pymsis
+simplekml
