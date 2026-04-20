@@ -1,6 +1,8 @@
 import gspread
 import pandas as pd
+import streamlit as st
 from google.oauth2.service_account import Credentials
+
 
 def fetch_cdm_data():
     try:
@@ -8,8 +10,8 @@ def fetch_cdm_data():
             "https://www.googleapis.com/auth/spreadsheets.readonly"
         ]
 
-        creds = Credentials.from_service_account_file(
-            ".secrets/gcp_service_account.json",
+        creds = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
             scopes=scope
         )
 
@@ -38,7 +40,7 @@ def fetch_cdm_data():
         df["Pc"] = pd.to_numeric(df["Pc"], errors="coerce")
         df["Miss_Distance"] = pd.to_numeric(df["Miss_Distance"], errors="coerce")
 
-        df = df.dropna(subset=["TCA_UTC", "Pc"])
+        df = df.dropna(subset=["TCA_UTC", "Pc", "Miss_Distance"])
 
         if df.empty:
             return None, "Parsed data is empty"

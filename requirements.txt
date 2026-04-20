@@ -10,3 +10,6 @@ skyfield
 cartopy
 pymsis
 simplekml
+gspread
+google-auth
+google-auth-oauthlib
