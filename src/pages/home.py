@@ -1,13 +1,15 @@
-#new homepage
-
 import base64
+from datetime import datetime, timezone, timedelta
+
 import matplotlib.pyplot as plt
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
 from src.services.space_weather_api import get_daily_kp
 from src.services.spacetrack_api import get_active_leo_by_country
 from src.services.launch_scraper import fetch_china_launches
+from src.services.cdm_fetcher import fetch_cdm_data
 
 
 def get_base64(path):
@@ -50,8 +52,8 @@ def tile(title, image_path, page_key, height=220):
     )
 
     if st.button(f"Open {title}", key=f"btn_{page_key}", use_container_width=True):
-        st.query_params["page"] = page_key
         st.session_state["page"] = page_key
+        st.query_params["page"] = page_key
         st.rerun()
 
 
@@ -63,35 +65,92 @@ def clean_rocket_name(text):
     return text.strip()
 
 
-def render():
+def format_hours(hours):
+    if pd.isna(hours):
+        return "TBD"
+    total_minutes = int(abs(hours) * 60)
+    h = total_minutes // 60
+    m = total_minutes % 60
+    return f"{h:02d} H {m:02d} M ago" if hours < 0 else f"in {h:02d} H {m:02d} M"
+
+
+def render_cdm_table(data):
     st.markdown("""
     <style>
-    .block-container { padding-top:0.1rem !important; }
+    .cdm-wrap {
+        border-radius: 12px;
+        overflow: hidden;
+        background: white;
+        color: black;
+        border: 1px solid #ddd;
+    }
+    .cdm-header {
+        display: grid;
+        grid-template-columns: 1.3fr 1.35fr 0.9fr 0.8fr 0.8fr;
+        padding: 12px 14px;
+        font-weight: bold;
+        background: #f2f2f2;
+        border-bottom: 1px solid #ddd;
+    }
+    .cdm-row {
+        display: grid;
+        grid-template-columns: 1.3fr 1.35fr 0.9fr 0.8fr 0.8fr;
+        padding: 12px 14px;
+        border-bottom: 1px solid #eee;
+    }
+    .cdm-cell {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
     </style>
     """, unsafe_allow_html=True)
 
+    st.markdown("""
+    <div class="cdm-wrap">
+        <div class="cdm-header">
+            <div>PRIMARY OBJECT</div>
+            <div>SECONDARY OBJECT</div>
+            <div>TCA</div>
+            <div>PC</div>
+            <div>MD (M)</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    for _, row in data.iterrows():
+        st.markdown(
+            f"""
+            <div class="cdm-row">
+                <div class="cdm-cell">{row['Primary_Object']}</div>
+                <div class="cdm-cell">{row['Secondary_Object']}</div>
+                <div class="cdm-cell">{format_hours(row['HOURS_TO_TCA'])}</div>
+                <div class="cdm-cell">{row['Pc']:.2e}</div>
+                <div class="cdm-cell">{int(row['Miss_Distance'])}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render():
+    st.markdown("<style>.block-container { padding-top:0.1rem !important; }</style>", unsafe_allow_html=True)
+
     FIG_SIZE = (8, 4)
 
-    col1, col2 = st.columns(2)
+    top1, top2 = st.columns(2)
 
-    with col1:
+    with top1:
         st.markdown("### Geomagnetic Storm Forecast")
         days, values = get_daily_kp()
 
         if values:
             fig, ax = plt.subplots(figsize=FIG_SIZE)
-
             x = list(range(len(values)))
             bars = ax.bar(x, values)
 
-            colors = [
-                "green" if v < 3 else
-                "yellow" if v < 5 else
-                "orange" if v < 7 else
-                "red"
-                for v in values
-            ]
-
+            colors = ["green" if v < 3 else "yellow" if v < 5 else "orange" if v < 7 else "red" for v in values]
             for b, c in zip(bars, colors):
                 b.set_color(c)
 
@@ -104,50 +163,37 @@ def render():
             for i, v in enumerate(values):
                 ax.text(i, v + 0.2, f"{v:.1f}", ha="center", fontsize=8)
 
-            from matplotlib.patches import Patch
-            ax.legend(handles=[
-                Patch(color="green", label="Quiet (<3)"),
-                Patch(color="yellow", label="Unsettled (3–4)"),
-                Patch(color="orange", label="Active (5–6)"),
-                Patch(color="red", label="Storm (≥7)")
-            ], fontsize=8)
-
             fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.25)
-
             st.pyplot(fig, use_container_width=True)
 
-    with col2:
+    with top2:
         st.markdown("### Countries by Active LEO Satellites")
-        labels, values, error = get_active_leo_by_country()
+        labels, values, _ = get_active_leo_by_country()
 
         if values:
             fig2, ax2 = plt.subplots(figsize=FIG_SIZE)
-
             ax2.barh(labels, values)
-            ax2.set_xlabel("Number of Satellites")
 
             max_val = max(values)
-            ax2.set_xlim(0, max_val * 1.15)
+            ax2.set_xlim(0, max_val * 1.2)
 
             for i, v in enumerate(values):
-                ax2.text(v + max_val * 0.02, i, str(v), va="center", fontsize=9)
+                ax2.text(v + max_val * 0.02, i, str(v), va="center")
 
             fig2.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.25)
-
             st.pyplot(fig2, use_container_width=True)
 
-    l1, l2 = st.columns(2)
+    bottom1, bottom2 = st.columns(2)
 
-    with l1:
+    with bottom1:
         st.markdown("### Upcoming Launches")
-        launches, error = fetch_china_launches()
+        launches, _ = fetch_china_launches()
 
         if launches:
             fig3, ax3 = plt.subplots(figsize=FIG_SIZE)
             ax3.axis("off")
 
             y = 0.9
-
             for i, launch in enumerate(launches[:4]):
                 rocket = clean_rocket_name(launch.get("rocket"))
                 date = launch.get("date") or "TBD"
@@ -158,15 +204,44 @@ def render():
                 ax3.text(0.02, y - 0.13, site, fontsize=9, color="#444", transform=ax3.transAxes)
 
                 if i < 3:
-                    ax3.plot([0.02, 0.98], [y - 0.17, y - 0.17],
-                             transform=ax3.transAxes, color="#cccccc", linewidth=1)
+                    ax3.plot([0.02, 0.98], [y - 0.17, y - 0.17], transform=ax3.transAxes)
 
                 y -= 0.23
 
             st.pyplot(fig3, use_container_width=True)
 
-    with l2:
-        st.empty()
+    with bottom2:
+        st.markdown("### High Risk Conjunctions")
+
+        df, _ = fetch_cdm_data()
+
+        if df is not None and not df.empty:
+            df["TCA_UTC"] = pd.to_datetime(df["TCA_UTC"], errors="coerce")
+            df["Pc"] = pd.to_numeric(df["Pc"], errors="coerce")
+            df["Miss_Distance"] = pd.to_numeric(df["Miss_Distance"], errors="coerce")
+
+            df = df.dropna(subset=["TCA_UTC", "Pc", "Miss_Distance"]).copy()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            one_week_ago = now - timedelta(days=7)
+
+            df["HOURS_TO_TCA"] = (df["TCA_UTC"] - now).dt.total_seconds() / 3600
+
+            df = df[df["TCA_UTC"] >= one_week_ago]
+
+            tab1, tab2, tab3 = st.tabs(["Nearest TCA", "Highest PC", "Lowest MD"])
+
+            with tab1:
+                render_cdm_table(df.sort_values("HOURS_TO_TCA").head(10))
+
+            with tab2:
+                render_cdm_table(df.sort_values("Pc", ascending=False).head(10))
+
+            with tab3:
+                render_cdm_table(df.sort_values("Miss_Distance").head(10))
+
+        else:
+            st.warning("No CDM data available")
 
     t1, t2 = st.columns(2)
     with t1:
