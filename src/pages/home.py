@@ -147,10 +147,18 @@ def render():
 
         if values:
             fig, ax = plt.subplots(figsize=FIG_SIZE)
+
             x = list(range(len(values)))
             bars = ax.bar(x, values)
 
-            colors = ["green" if v < 3 else "yellow" if v < 5 else "orange" if v < 7 else "red" for v in values]
+            colors = [
+                "green" if v < 3 else
+                "yellow" if v < 5 else
+                "orange" if v < 7 else
+                "red"
+                for v in values
+            ]
+
             for b, c in zip(bars, colors):
                 b.set_color(c)
 
@@ -163,7 +171,16 @@ def render():
             for i, v in enumerate(values):
                 ax.text(i, v + 0.2, f"{v:.1f}", ha="center", fontsize=8)
 
+            from matplotlib.patches import Patch
+            ax.legend(handles=[
+                Patch(color="green", label="Quiet (<3)"),
+                Patch(color="yellow", label="Unsettled (3–4)"),
+                Patch(color="orange", label="Active (5–6)"),
+                Patch(color="red", label="Storm (≥7)")
+            ], fontsize=8)
+
             fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.25)
+
             st.pyplot(fig, use_container_width=True)
 
     with top2:
