@@ -93,6 +93,34 @@ def fetch_latest_tle(session, norad_id):
     return f"NORAD {norad_id}", lines[0], lines[1]
 
 
+def fetch_spacecraft_name(session, norad_id: int) -> str:
+    """
+    Fetch the official spacecraft / object name for a given NORAD catalog ID
+    from the Space-Track General Perturbations (gp) catalog.
+
+    Returns the OBJECT_NAME string (e.g. "COSMOS 954 DEB") on success,
+    or "Unknown" if the record cannot be found or the field is absent.
+    """
+    url = (
+        f"https://www.space-track.org/basicspacedata/query/class/gp"
+        f"/NORAD_CAT_ID/{norad_id}/orderby/EPOCH%20desc/limit/1"
+        f"/format/json/predicates/OBJECT_NAME,NORAD_CAT_ID,OBJECT_TYPE,COUNTRY_CODE"
+    )
+    try:
+        data = retry_get(session, url).json()
+        if data and isinstance(data, list) and len(data) > 0:
+            record = data[0]
+            name = (
+                record.get("OBJECT_NAME")
+                or record.get("object_name")
+                or "Unknown"
+            )
+            return name.strip()
+    except Exception as e:
+        st.warning(f"Could not fetch spacecraft name: {e}")
+    return "Unknown"
+
+
 def fetch_noaa_kp():
     url = "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
     try:
@@ -355,6 +383,12 @@ def render():
                         st.error(f"Login failed: {e}")
                         st.stop()
 
+                # ── NEW: fetch spacecraft name ────────────────────────────
+                with st.spinner("Fetching spacecraft name..."):
+                    sc_name = fetch_spacecraft_name(session, int(norad_id))
+                    st.session_state["reentry_sc_name"] = sc_name
+                    st.success(f"Spacecraft: {sc_name}")
+
                 with st.spinner("Fetching TIP data..."):
                     try:
                         tip = fetch_tip(session, int(norad_id))
@@ -387,19 +421,27 @@ def render():
     tle = st.session_state.get("reentry_tle")
     kp = st.session_state.get("reentry_kp")
     pred_time = st.session_state.get("reentry_pred_time")
+    sc_name = st.session_state.get("reentry_sc_name")
 
     if not tip and not tle:
         return
 
     st.markdown("---")
 
-    # Metrics
+    # Metrics — now includes spacecraft name
     if kp is not None and pred_time:
         st.markdown("<h3>Prediction Summary</h3>", unsafe_allow_html=True)
-        m1, m2, m3 = st.columns(3)
+        m1, m2, m3, m4 = st.columns(4)
         m1.metric("NORAD ID", norad_id)
-        m2.metric("Avg Kp Index", kp)
-        m3.metric("Prediction Time (UTC)", pred_time)
+        m2.metric("Spacecraft Name", sc_name or "—")
+        m3.metric("Avg Kp Index", kp)
+        m4.metric("Prediction Time (UTC)", pred_time)
+    elif sc_name:
+        # Show name even when prediction hasn't been run yet
+        st.markdown("<h3>Object Identity</h3>", unsafe_allow_html=True)
+        id1, id2 = st.columns(2)
+        id1.metric("NORAD ID", norad_id)
+        id2.metric("Spacecraft Name", sc_name)
 
     # TLE display
     if tle:
@@ -440,10 +482,11 @@ def render():
             fig_r, ax_r = plt.subplots(figsize=(8, 6))
             ax_r.axis("off")
             lines = [
-                f"NORAD ID  : {norad_id}",
-                f"Kp Index  : {kp}",
-                f"Pred Time : {pred_time}",
-                f"TIP Count : {len(tip)}",
+                f"NORAD ID   : {norad_id}",
+                f"Spacecraft : {sc_name or 'Unknown'}",
+                f"Kp Index   : {kp}",
+                f"Pred Time  : {pred_time}",
+                f"TIP Count  : {len(tip)}",
             ]
             if tle:
                 lines += ["", "── Latest TLE ──", tle[0], tle[1], tle[2]]
