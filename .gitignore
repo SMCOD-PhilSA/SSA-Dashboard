@@ -5,3 +5,4 @@ venv
 src/__pycache__
 src/services/__pycache__
 src/pages/__pycache__
+.env
