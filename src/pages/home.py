@@ -10,6 +10,7 @@ from src.services.space_weather_api import get_daily_kp
 from src.services.spacetrack_api import get_active_leo_by_country
 from src.services.launch_scraper import fetch_china_launches
 from src.services.cdm_fetcher import fetch_cdm_data
+from src.pages.auth import logout
 
 
 def get_base64(path):
@@ -135,6 +136,32 @@ def render_cdm_table(data):
 
 
 def render():
+
+    user = st.session_state.get("user", {})
+    name = user.get("displayName", "User")
+    email = user.get("mail") or user.get("userPrincipalName", "")
+
+    is_dark = st.session_state.get("theme", "dark") == "dark"
+    toggle_label = "Light Mode" if is_dark else "Dark Mode"
+    next_theme = "light" if is_dark else "dark"
+
+    col1, col2, col3 = st.columns([6,2,2])
+
+    with col1:
+        st.markdown(f"**{name}**  \n{email}")
+
+    with col2:
+        if st.button(toggle_label, use_container_width=True):
+            st.session_state["theme"] = next_theme
+            st.rerun()
+
+    with col3:
+        if st.button("Sign Out", use_container_width=True):
+            logout()
+            st.rerun()
+
+    st.markdown("---")
+
     st.markdown("<style>.block-container { padding-top:0.1rem !important; }</style>", unsafe_allow_html=True)
 
     FIG_SIZE = (8, 4)
