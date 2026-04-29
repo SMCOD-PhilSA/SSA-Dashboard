@@ -42,7 +42,12 @@ def render():
         background-color: {sel_bg} !important;
         border: 1px solid {sel_border} !important;
     }}
-    /* each option row */
+    /* listbox */
+    ul[role="listbox"] {{
+        background-color: {sel_bg} !important;
+        color: {sel_text} !important;
+    }}
+    /* each option */
     li[role="option"] {{
         background-color: {sel_bg} !important;
         color: {sel_text} !important;
