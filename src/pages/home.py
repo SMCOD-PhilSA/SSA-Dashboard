@@ -212,23 +212,29 @@ def render():
     bottom1, bottom2 = st.columns(2)
 
     with bottom1:
-        st.subheader("Upcoming China Launches")
-        launches, _ = get_china_launches()
+        st.markdown("### Upcoming Launches")
+        launches, _ = fetch_china_launches()
 
         if launches:
-            for launch in launches[:5]:
+            fig3, ax3 = plt.subplots(figsize=FIG_SIZE)
+            ax3.axis("off")
+
+            y = 0.9
+            for i, launch in enumerate(launches[:4]):
                 rocket = clean_rocket_name(launch.get("rocket"))
                 date = launch.get("date") or "TBD"
                 site = launch.get("site") or "TBD"
 
-                st.markdown(f"""
-                    **{rocket}**  
-                    {date}  
-                    :gray[{site}]
-                    ---
-                """)
-        else:
-            st.info("No upcoming launches data available.")
+                ax3.text(0.02, y, rocket, fontsize=12, fontweight="bold", transform=ax3.transAxes)
+                ax3.text(0.02, y - 0.07, date, fontsize=10, transform=ax3.transAxes)
+                ax3.text(0.02, y - 0.13, site, fontsize=9, color="#444", transform=ax3.transAxes)
+
+                if i < 3:
+                    ax3.plot([0.02, 0.98], [y - 0.17, y - 0.17], transform=ax3.transAxes)
+
+                y -= 0.23
+
+            st.pyplot(fig3, use_container_width=True)
 
     with bottom2:
         st.subheader("High Risk Conjunctions")
