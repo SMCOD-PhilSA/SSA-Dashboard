@@ -174,7 +174,7 @@ def render():
 
         if values:
             # Detect current theme
-            theme = st_theme()
+            theme = next_theme()
             is_dark = theme and theme.get("base") == "dark"
 
             # Choose style based on theme
