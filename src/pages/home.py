@@ -173,42 +173,68 @@ def render():
         days, values = get_daily_kp()
 
         if values:
+            # Use dark style + manual tweaks for better contrast on pure black
+            plt.style.use('dark_background')
+            
             fig, ax = plt.subplots(figsize=FIG_SIZE)
 
             x = list(range(len(values)))
-            bars = ax.bar(x, values)
+            bars = ax.bar(x, values, width=0.65, edgecolor='white', linewidth=0.8)
 
+            # Keep your meaningful Kp color scale (they pop well on dark bg)
             colors = [
-                "green" if v < 3 else
-                "yellow" if v < 5 else
-                "orange" if v < 7 else
-                "red"
-                for v in values
+                "#2ecc71" if v < 3 else      # vibrant green
+                "#f1c40f" if v < 5 else      # bright yellow
+                "#e67e22" if v < 7 else      # orange
+                "#e74c3c" for v in values    # red
             ]
 
             for b, c in zip(bars, colors):
                 b.set_color(c)
 
-            ax.set_ylabel("Kp Index")
+            # Dark theme styling
+            ax.set_facecolor('#0e1117')        # slightly lighter than pure black for depth
+            fig.patch.set_facecolor('#0e1117') # match Streamlit dark background
+
+            ax.set_ylabel("Kp Index", color='white', fontsize=11, labelpad=10)
+            ax.set_xlabel("Day", color='white', fontsize=11)
+
             ax.set_xticks(x)
-            ax.set_xticklabels(days, rotation=30, ha="right")
-            ax.set_ylim(0, 9)
-            ax.set_xlim(-0.5, len(values) - 0.5)
+            ax.set_xticklabels(days, rotation=30, ha="right", color='white')
 
+            ax.set_ylim(0, 9.2)
+            ax.set_xlim(-0.6, len(values) - 0.4)
+
+            # Value labels on top of bars
             for i, v in enumerate(values):
-                ax.text(i, v + 0.2, f"{v:.1f}", ha="center", fontsize=8)
+                ax.text(i, v + 0.25, f"{v:.1f}", 
+                       ha="center", va="bottom", 
+                       color='white', fontsize=9, fontweight='bold')
 
+            # Legend with dark-friendly patches
             from matplotlib.patches import Patch
             ax.legend(handles=[
-                Patch(color="green", label="Quiet (<3)"),
-                Patch(color="yellow", label="Unsettled (3–4)"),
-                Patch(color="orange", label="Active (5–6)"),
-                Patch(color="red", label="Storm (≥7)")
-            ], fontsize=8)
+                Patch(color="#2ecc71", label="Quiet (<3)"),
+                Patch(color="#f1c40f", label="Unsettled (3–4)"),
+                Patch(color="#e67e22", label="Active (5–6)"),
+                Patch(color="#e74c3c", label="Storm (≥7)")
+            ], 
+            loc='upper right', fontsize=8.5, 
+            frameon=True, facecolor='#1e1e1e', edgecolor='#555555')
 
-            fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.25)
+            # Grid for better readability on dark bg
+            ax.grid(axis='y', linestyle='--', alpha=0.3, color='#555555')
 
-            st.pyplot(fig, use_container_width=True)
+            # Clean up spines
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_color('#555555')
+            ax.spines['bottom'].set_color('#555555')
+
+            # Tight layout
+            fig.subplots_adjust(left=0.12, right=0.95, top=0.90, bottom=0.28)
+
+            st.pyplot(fig, use_container_width=True, clear_figure=True)
 
     with top2:
         st.markdown("### Countries by Active LEO Satellites")
