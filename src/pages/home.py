@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import matplotlib as plt
 
 from src.services.space_weather_api import get_daily_kp
 from src.services.spacetrack_api import get_active_leo_by_country
