@@ -161,22 +161,51 @@ def render():
                 x="Day",
                 y="Kp Index",
                 color="Kp Index",
-                color_continuous_scale=["green", "yellow", "orange", "red"],
+                color_continuous_scale=["#00cc00", "#ffcc00", "#ff9900", "#ff3333"],
                 range_color=[0, 9],
-                height=380,
+                height=390,
             )
 
-            # Apply transparent background
-            fig1.update_layout({
-                'plot_bgcolor': 'rgba(0, 0, 0, 0)',
-                'paper_bgcolor': 'rgba(0, 0, 0, 0)',
-            })
-
+            # Transparent background + Dashboard-friendly layout
             fig1.update_layout(
+                plot_bgcolor='rgba(0, 0, 0, 0)',
+                paper_bgcolor='rgba(0, 0, 0, 0)',
                 yaxis_range=[0, 9.5],
                 xaxis_tickangle=-30,
-                margin=dict(t=20, b=60),
-                coloraxis_showscale=False,
+                margin=dict(t=30, b=70, l=40, r=20),
+                showlegend=False,          # We'll use custom legend
+                xaxis_showgrid=False,
+                yaxis_showgrid=False,
+            )
+
+            # Custom Legend
+            fig1.add_annotation(
+                text="Quiet (<3)",
+                xref="paper", yref="paper",
+                x=0.02, y=1.15,
+                showarrow=False,
+                font=dict(color="#00cc00", size=13)
+            )
+            fig1.add_annotation(
+                text="Unsettled (3–4)",
+                xref="paper", yref="paper",
+                x=0.28, y=1.15,
+                showarrow=False,
+                font=dict(color="#ffcc00", size=13)
+            )
+            fig1.add_annotation(
+                text="Active (5–6)",
+                xref="paper", yref="paper",
+                x=0.58, y=1.15,
+                showarrow=False,
+                font=dict(color="#ff9900", size=13)
+            )
+            fig1.add_annotation(
+                text="Storm (≥7)",
+                xref="paper", yref="paper",
+                x=0.88, y=1.15,
+                showarrow=False,
+                font=dict(color="#ff3333", size=13)
             )
 
             st.plotly_chart(fig1, use_container_width=True)
@@ -195,20 +224,19 @@ def render():
                 orientation='h',
                 color="Satellites",
                 color_continuous_scale=px.colors.sequential.Blues_r,
-                height=380,
+                height=390,
             )
 
-            # Apply transparent background
-            fig2.update_layout({
-                'plot_bgcolor': 'rgba(0, 0, 0, 0)',
-                'paper_bgcolor': 'rgba(0, 0, 0, 0)',
-            })
-
-            fig2.update_layout(margin=dict(t=20, b=40))
+            fig2.update_layout(
+                plot_bgcolor='rgba(0, 0, 0, 0)',
+                paper_bgcolor='rgba(0, 0, 0, 0)',
+                margin=dict(t=30, b=60, l=20, r=40),
+                xaxis_showgrid=False,
+            )
 
             st.plotly_chart(fig2, use_container_width=True)
 
-    # Bottom Row
+    # ====================== BOTTOM ROW ======================
     bottom1, bottom2 = st.columns(2)
 
     with bottom1:
@@ -222,15 +250,17 @@ def render():
                 site = launch.get("site") or "TBD"
 
                 st.markdown(f"""
-                <div style="padding: 12px 0 16px 0;">
-                    <strong>{rocket}</strong><br>
-                    <span style="color: #888; font-size: 0.95em;">{date}</span><br>
-                    <span style="color: #666; font-size: 0.9em;">{site}</span>
+                <div style="background-color: {'#1f1f1f' if is_dark else '#f8f9fa'}; 
+                            padding: 16px; border-radius: 10px; margin-bottom: 12px; 
+                            border-left: 4px solid #00b4d8;">
+                    <strong style="font-size: 1.05em;">{rocket}</strong><br>
+                    <span style="color: #aaaaaa; font-size: 0.95em;">{date}</span><br>
+                    <span style="color: #777777; font-size: 0.9em;">{site}</span>
                 </div>
                 """, unsafe_allow_html=True)
         else:
             st.info("No upcoming launches data available.")
-            
+
     with bottom2:
         st.subheader("High Risk Conjunctions")
         df_raw, _ = get_cdm_data()
