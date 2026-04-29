@@ -4,7 +4,6 @@ from datetime import datetime, timezone, timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-import matplotlib as plt
 
 from src.services.space_weather_api import get_daily_kp
 from src.services.spacetrack_api import get_active_leo_by_country
@@ -213,30 +212,25 @@ def render():
     bottom1, bottom2 = st.columns(2)
 
     with bottom1:
-        st.markdown("### Upcoming Launches")
-        launches, _ = fetch_china_launches()
+        st.subheader("Upcoming China Launches")
+        launches, _ = get_china_launches()
 
-        if launches:
-            fig3, ax3 = plt.subplots(figsize=FIG_SIZE)
-            ax3.axis("off")
-
-            y = 0.9
-            for i, launch in enumerate(launches[:4]):
-                rocket = clean_rocket_name(launch.get("rocket"))
+        if launches and len(launches) > 0:
+            for launch in launches[:5]:
+                rocket = clean_rocket_name(launch.get("rocket", ""))
                 date = launch.get("date") or "TBD"
                 site = launch.get("site") or "TBD"
 
-                ax3.text(0.02, y, rocket, fontsize=12, fontweight="bold", transform=ax3.transAxes)
-                ax3.text(0.02, y - 0.07, date, fontsize=10, transform=ax3.transAxes)
-                ax3.text(0.02, y - 0.13, site, fontsize=9, color="#444", transform=ax3.transAxes)
-
-                if i < 3:
-                    ax3.plot([0.02, 0.98], [y - 0.17, y - 0.17], transform=ax3.transAxes)
-
-                y -= 0.23
-
-            st.pyplot(fig3, use_container_width=True)
-
+                st.markdown(f"""
+                <div style="padding: 12px 0 16px 0;">
+                    <strong>{rocket}</strong><br>
+                    <span style="color: #888; font-size: 0.95em;">{date}</span><br>
+                    <span style="color: #666; font-size: 0.9em;">{site}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("No upcoming launches data available.")
+            
     with bottom2:
         st.subheader("High Risk Conjunctions")
         df_raw, _ = get_cdm_data()
