@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ====================== CACHING ======================
-@st.cache_data(ttl=1800)   # 30 minutes
+@st.cache_data(ttl=1800)
 def get_kp_data():
     return get_daily_kp()
 
@@ -32,7 +32,7 @@ def get_leo_by_country():
 def get_china_launches():
     return fetch_china_launches()
 
-@st.cache_data(ttl=600)    # 10 minutes
+@st.cache_data(ttl=600)
 def get_cdm_data():
     return fetch_cdm_data()
 
@@ -43,7 +43,6 @@ def get_base64_image(path: str) -> str:
         return base64.b64encode(f.read()).decode()
 
 def tile(title: str, image_path: str, page_key: str):
-    """Simple clean tile"""
     img_b64 = get_base64_image(image_path)
     ext = image_path.rsplit(".", 1)[-1].lower()
     mime = "image/png" if ext == "png" else "image/jpeg"
@@ -157,7 +156,7 @@ def render():
         if values:
             df_kp = pd.DataFrame({"Day": days, "Kp Index": values})
 
-            fig = px.bar(
+            fig1 = px.bar(
                 df_kp,
                 x="Day",
                 y="Kp Index",
@@ -166,13 +165,21 @@ def render():
                 range_color=[0, 9],
                 height=380,
             )
-            fig.update_layout(
+
+            # Apply transparent background
+            fig1.update_layout({
+                'plot_bgcolor': 'rgba(0, 0, 0, 0)',
+                'paper_bgcolor': 'rgba(0, 0, 0, 0)',
+            })
+
+            fig1.update_layout(
                 yaxis_range=[0, 9.5],
                 xaxis_tickangle=-30,
                 margin=dict(t=20, b=60),
                 coloraxis_showscale=False,
             )
-            st.plotly_chart(fig, use_container_width=True)
+
+            st.plotly_chart(fig1, use_container_width=True)
 
     with top2:
         st.subheader("Countries by Active LEO Satellites")
@@ -190,7 +197,15 @@ def render():
                 color_continuous_scale=px.colors.sequential.Blues_r,
                 height=380,
             )
+
+            # Apply transparent background
+            fig2.update_layout({
+                'plot_bgcolor': 'rgba(0, 0, 0, 0)',
+                'paper_bgcolor': 'rgba(0, 0, 0, 0)',
+            })
+
             fig2.update_layout(margin=dict(t=20, b=40))
+
             st.plotly_chart(fig2, use_container_width=True)
 
     # Bottom Row
