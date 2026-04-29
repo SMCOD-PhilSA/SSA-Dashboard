@@ -1,8 +1,8 @@
 import base64
 from datetime import datetime, timezone, timedelta
 
-import matplotlib.pyplot as plt
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -12,44 +12,58 @@ from src.services.launch_scraper import fetch_china_launches
 from src.services.cdm_fetcher import fetch_cdm_data
 from src.pages.auth import logout
 
+# ====================== CONFIG ======================
+st.set_page_config(
+    page_title="Space Dashboard",
+    page_icon="🛰️",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-def get_base64(path):
+# ====================== CACHING ======================
+@st.cache_data(ttl=1800)  # 30 minutes
+def get_kp_data():
+    return get_daily_kp()
+
+@st.cache_data(ttl=3600)  # 1 hour
+def get_leo_by_country():
+    return get_active_leo_by_country()
+
+@st.cache_data(ttl=1800)
+def get_china_launches():
+    return fetch_china_launches()
+
+@st.cache_data(ttl=600)   # 10 minutes - CDM changes faster
+def get_cdm_data():
+    return fetch_cdm_data()
+
+# ====================== HELPERS ======================
+
+def get_base64_image(path: str) -> str:
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-
-def tile(title, image_path, page_key, height=220):
-    img_b64 = get_base64(image_path)
+def tile(title: str, image_path: str, page_key: str):
+    """Clickable image tile"""
+    img_b64 = get_base64_image(image_path)
     ext = image_path.rsplit(".", 1)[-1].lower()
     mime = "image/png" if ext == "png" else "image/jpeg"
 
-    components.html(
+    st.markdown(
         f"""
-        <html>
-        <style>
-        body {{margin:0;overflow:hidden;}}
-        .tile {{
-            height:{height}px;
-            border-radius:14px;
-            background-image:url("data:{mime};base64,{img_b64}");
-            background-size:cover;
-            background-position:center;
-            position:relative;
-        }}
-        .overlay {{
-            position:absolute;
-            inset:0;
-            background:linear-gradient(to bottom, rgba(0,0,0,0.0), rgba(0,0,0,0.75));
-        }}
-        </style>
-        <body>
-            <div class="tile">
-                <div class="overlay"></div>
+        <div style="position: relative; border-radius: 14px; overflow: hidden; cursor: pointer;"
+             onclick="document.getElementById('btn_{page_key}').click()">
+            <img src="data:{mime};base64,{img_b64}" 
+                 style="width:100%; height:220px; object-fit:cover; display:block;">
+            <div style="position:absolute; inset:0; 
+                        background:linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.85));"></div>
+            <div style="position:absolute; bottom:20px; left:20px; color:white; 
+                        font-size:1.35rem; font-weight:600; text-shadow: 0 2px 4px rgba(0,0,0,0.6);">
+                {title}
             </div>
-        </body>
-        </html>
+        </div>
         """,
-        height=height,
+        unsafe_allow_html=True,
     )
 
     if st.button(f"Open {title}", key=f"btn_{page_key}", use_container_width=True):
@@ -57,16 +71,14 @@ def tile(title, image_path, page_key, height=220):
         st.query_params["page"] = page_key
         st.rerun()
 
-
-def clean_rocket_name(text):
+def clean_rocket_name(text: str) -> str:
     if not text:
         return "TBD"
     for k in ["Unknown Payload", "Demo Flight", "Chang'e"]:
         text = text.replace(k, "")
     return text.strip()
 
-
-def format_hours(hours):
+def format_hours(hours: float) -> str:
     if pd.isna(hours):
         return "TBD"
     total_minutes = int(abs(hours) * 60)
@@ -74,8 +86,7 @@ def format_hours(hours):
     m = total_minutes % 60
     return f"{h:02d} H {m:02d} M ago" if hours < 0 else f"in {h:02d} H {m:02d} M"
 
-
-def render_cdm_table(data):
+def render_cdm_table(data: pd.DataFrame):
     st.markdown("""
     <style>
     .cdm-wrap {
@@ -134,25 +145,28 @@ def render_cdm_table(data):
 
     st.markdown("</div>", unsafe_allow_html=True)
 
+# ====================== MAIN RENDER ======================
 
 def render():
-
     user = st.session_state.get("user", {})
     name = user.get("displayName", "User")
     email = user.get("mail") or user.get("userPrincipalName", "")
 
-    is_dark = st.session_state.get("theme", "dark") == "dark"
-    toggle_label = "Light Mode" if is_dark else "Dark Mode"
-    next_theme = "light" if is_dark else "dark"
+    # Theme handling
+    if "theme" not in st.session_state:
+        st.session_state["theme"] = "dark"
 
-    col1, col2, col3 = st.columns([6,2,2])
+    is_dark = st.session_state["theme"] == "dark"
+    toggle_label = "☀️ Light Mode" if is_dark else "🌙 Dark Mode"
+
+    col1, col2, col3 = st.columns([6, 2, 2])
 
     with col1:
         st.markdown(f"**{name}**  \n{email}")
 
     with col2:
         if st.button(toggle_label, use_container_width=True):
-            st.session_state["theme"] = next_theme
+            st.session_state["theme"] = "light" if is_dark else "dark"
             st.rerun()
 
     with col3:
@@ -160,106 +174,102 @@ def render():
             logout()
             st.rerun()
 
-    st.markdown("---")
+    st.divider()
 
-    st.markdown("<style>.block-container { padding-top:0.1rem !important; }</style>", unsafe_allow_html=True)
-
-    FIG_SIZE = (8, 4)
+    # ====================== DASHBOARD CHARTS ======================
 
     top1, top2 = st.columns(2)
 
     with top1:
-        st.markdown("### Geomagnetic Storm Forecast")
-        days, values = get_daily_kp()
+        st.subheader("Geomagnetic Storm Forecast")
+        days, values = get_kp_data()
 
         if values:
-            fig, ax = plt.subplots(figsize=FIG_SIZE)
+            df_kp = pd.DataFrame({"Day": days, "Kp Index": values})
 
-            x = list(range(len(values)))
-            bars = ax.bar(x, values)
+            fig = px.bar(
+                df_kp,
+                x="Day",
+                y="Kp Index",
+                color="Kp Index",
+                color_continuous_scale=["#00cc00", "#ffcc00", "#ff9900", "#ff3333"],
+                range_color=[0, 9],
+                height=400
+            )
 
-            colors = [
-                "green" if v < 3 else
-                "yellow" if v < 5 else
-                "orange" if v < 7 else
-                "red"
-                for v in values
-            ]
+            fig.update_traces(texttemplate="%{y:.1f}", textposition="outside", marker_line_width=0)
+            fig.update_layout(
+                yaxis_title="Kp Index",
+                yaxis_range=[0, 9.5],
+                xaxis_tickangle=-30,
+                margin=dict(l=40, r=20, t=40, b=80),
+                coloraxis_showscale=False,
+            )
 
-            for b, c in zip(bars, colors):
-                b.set_color(c)
+            # Legend annotations
+            fig.add_annotation(text="Quiet (<3)", xref="paper", yref="paper", x=0.05, y=1.12, showarrow=False, font=dict(color="#00cc00"))
+            fig.add_annotation(text="Unsettled (3–4)", xref="paper", yref="paper", x=0.32, y=1.12, showarrow=False, font=dict(color="#ffcc00"))
+            fig.add_annotation(text="Active (5–6)", xref="paper", yref="paper", x=0.62, y=1.12, showarrow=False, font=dict(color="#ff9900"))
+            fig.add_annotation(text="Storm (≥7)", xref="paper", yref="paper", x=0.88, y=1.12, showarrow=False, font=dict(color="#ff3333"))
 
-            ax.set_ylabel("Kp Index")
-            ax.set_xticks(x)
-            ax.set_xticklabels(days, rotation=30, ha="right")
-            ax.set_ylim(0, 9)
-            ax.set_xlim(-0.5, len(values) - 0.5)
-
-            for i, v in enumerate(values):
-                ax.text(i, v + 0.2, f"{v:.1f}", ha="center", fontsize=8)
-
-            from matplotlib.patches import Patch
-            ax.legend(handles=[
-                Patch(color="green", label="Quiet (<3)"),
-                Patch(color="yellow", label="Unsettled (3–4)"),
-                Patch(color="orange", label="Active (5–6)"),
-                Patch(color="red", label="Storm (≥7)")
-            ], fontsize=8)
-
-            fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.25)
-
-            st.pyplot(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
 
     with top2:
-        st.markdown("### Countries by Active LEO Satellites")
-        labels, values, _ = get_active_leo_by_country()
+        st.subheader("Countries by Active LEO Satellites")
+        labels, values, _ = get_leo_by_country()
 
         if values:
-            fig2, ax2 = plt.subplots(figsize=FIG_SIZE)
-            ax2.barh(labels, values)
+            df_leo = pd.DataFrame({"Country": labels, "Satellites": values})
 
-            max_val = max(values)
-            ax2.set_xlim(0, max_val * 1.2)
+            fig2 = px.bar(
+                df_leo,
+                x="Satellites",
+                y="Country",
+                orientation='h',
+                color="Satellites",
+                color_continuous_scale=px.colors.sequential.Blues_r,
+                height=400,
+            )
 
-            for i, v in enumerate(values):
-                ax2.text(v + max_val * 0.02, i, str(v), va="center")
+            fig2.update_layout(
+                xaxis_title="Number of Active LEO Satellites",
+                yaxis_title=None,
+                margin=dict(l=20, r=20, t=40, b=60),
+            )
 
-            fig2.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.25)
-            st.pyplot(fig2, use_container_width=True)
+            st.plotly_chart(fig2, use_container_width=True)
 
+    # Bottom Section
     bottom1, bottom2 = st.columns(2)
 
     with bottom1:
-        st.markdown("### Upcoming Launches")
-        launches, _ = fetch_china_launches()
+        st.subheader("Upcoming China Launches")
+        launches, _ = get_china_launches()
 
         if launches:
-            fig3, ax3 = plt.subplots(figsize=FIG_SIZE)
-            ax3.axis("off")
-
-            y = 0.9
-            for i, launch in enumerate(launches[:4]):
+            for launch in launches[:5]:
                 rocket = clean_rocket_name(launch.get("rocket"))
                 date = launch.get("date") or "TBD"
                 site = launch.get("site") or "TBD"
 
-                ax3.text(0.02, y, rocket, fontsize=12, fontweight="bold", transform=ax3.transAxes)
-                ax3.text(0.02, y - 0.07, date, fontsize=10, transform=ax3.transAxes)
-                ax3.text(0.02, y - 0.13, site, fontsize=9, color="#444", transform=ax3.transAxes)
-
-                if i < 3:
-                    ax3.plot([0.02, 0.98], [y - 0.17, y - 0.17], transform=ax3.transAxes)
-
-                y -= 0.23
-
-            st.pyplot(fig3, use_container_width=True)
+                st.markdown(f"""
+                <div style="padding: 16px; border-radius: 10px; 
+                            background-color: {'#1e1e1e' if is_dark else '#f8f9fa'}; 
+                            border-left: 5px solid #00b4d8; margin-bottom: 12px;">
+                    <strong>{rocket}</strong><br>
+                    <span style="color: #888; font-size: 0.95rem;">{date}</span><br>
+                    <small style="color: #666;">{site}</small>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("No upcoming launches found.")
 
     with bottom2:
-        st.markdown("### High Risk Conjunctions")
+        st.subheader("High Risk Conjunctions")
+        df_raw, _ = get_cdm_data()
 
-        df, _ = fetch_cdm_data()
-
-        if df is not None and not df.empty:
+        if df_raw is not None and not df_raw.empty:
+            df = df_raw.copy()
             df["TCA_UTC"] = pd.to_datetime(df["TCA_UTC"], errors="coerce")
             df["Pc"] = pd.to_numeric(df["Pc"], errors="coerce")
             df["Miss_Distance"] = pd.to_numeric(df["Miss_Distance"], errors="coerce")
@@ -267,25 +277,23 @@ def render():
             df = df.dropna(subset=["TCA_UTC", "Pc", "Miss_Distance"]).copy()
 
             now = datetime.now(timezone.utc).replace(tzinfo=None)
-            one_week_ago = now - timedelta(days=7)
-
             df["HOURS_TO_TCA"] = (df["TCA_UTC"] - now).dt.total_seconds() / 3600
 
-            df = df[df["TCA_UTC"] >= one_week_ago]
+            df = df[df["TCA_UTC"] >= (now - timedelta(days=7))]
 
             tab1, tab2, tab3 = st.tabs(["Nearest TCA", "Highest PC", "Lowest MD"])
 
             with tab1:
                 render_cdm_table(df.sort_values("HOURS_TO_TCA").head(10))
-
             with tab2:
                 render_cdm_table(df.sort_values("Pc", ascending=False).head(10))
-
             with tab3:
                 render_cdm_table(df.sort_values("Miss_Distance").head(10))
-
         else:
-            st.warning("No CDM data available")
+            st.warning("No CDM data available at the moment.")
+
+    # Navigation Tiles
+    st.divider()
 
     t1, t2 = st.columns(2)
     with t1:
