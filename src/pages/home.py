@@ -173,82 +173,42 @@ def render():
         days, values = get_daily_kp()
 
         if values:
-            # Detect current theme
-            theme = next_theme()
-            is_dark = theme and theme.get("base") == "dark"
-
-            # Choose style based on theme
-            if is_dark:
-                plt.style.use('dark_background')
-                bg_color = "#0e1117"          # Streamlit dark background
-                text_color = "white"
-                grid_color = "#555555"
-                spine_color = "#555555"
-                legend_bg = "#1e1e1e"
-            else:
-                plt.style.use('default')      # or 'seaborn-v0_8-whitegrid'
-                bg_color = "#ffffff"
-                text_color = "black"
-                grid_color = "#cccccc"
-                spine_color = "#cccccc"
-                legend_bg = "#f8f9fa"
-
             fig, ax = plt.subplots(figsize=FIG_SIZE)
 
             x = list(range(len(values)))
-            bars = ax.bar(x, values, width=0.65, edgecolor=spine_color, linewidth=0.8)
+            bars = ax.bar(x, values)
 
-            # Smart color scale (works in both modes)
             colors = [
-                "#2ecc71" if v < 3 else
-                "#f1c40f" if v < 5 else
-                "#e67e22" if v < 7 else
-                "#e74c3c" 
+                "green" if v < 3 else
+                "yellow" if v < 5 else
+                "orange" if v < 7 else
+                "red"
                 for v in values
             ]
 
             for b, c in zip(bars, colors):
                 b.set_color(c)
 
-            # Apply theme colors
-            ax.set_facecolor(bg_color)
-            fig.patch.set_facecolor(bg_color)
-
-            ax.set_ylabel("Kp Index", color=text_color, fontsize=11, labelpad=10)
+            ax.set_ylabel("Kp Index")
             ax.set_xticks(x)
-            ax.set_xticklabels(days, rotation=30, ha="right", color=text_color)
+            ax.set_xticklabels(days, rotation=30, ha="right")
+            ax.set_ylim(0, 9)
+            ax.set_xlim(-0.5, len(values) - 0.5)
 
-            ax.set_ylim(0, 9.2)
-            ax.set_xlim(-0.6, len(values) - 0.4)
-
-            # Value labels
             for i, v in enumerate(values):
-                ax.text(i, v + 0.25, f"{v:.1f}", 
-                    ha="center", va="bottom", 
-                    color=text_color, fontsize=9, fontweight='bold')
+                ax.text(i, v + 0.2, f"{v:.1f}", ha="center", fontsize=8)
 
-            # Legend
+            from matplotlib.patches import Patch
             ax.legend(handles=[
-                Patch(color="#2ecc71", label="Quiet (<3)"),
-                Patch(color="#f1c40f", label="Unsettled (3–4)"),
-                Patch(color="#e67e22", label="Active (5–6)"),
-                Patch(color="#e74c3c", label="Storm (≥7)")
-            ], 
-            loc='upper right', fontsize=8.5, 
-            frameon=True, facecolor=legend_bg, edgecolor=spine_color)
+                Patch(color="green", label="Quiet (<3)"),
+                Patch(color="yellow", label="Unsettled (3–4)"),
+                Patch(color="orange", label="Active (5–6)"),
+                Patch(color="red", label="Storm (≥7)")
+            ], fontsize=8)
 
-            # Grid
-            ax.grid(axis='y', linestyle='--', alpha=0.4, color=grid_color)
+            fig.subplots_adjust(left=0.12, right=0.95, top=0.88, bottom=0.25)
 
-            # Spines
-            for spine in ['top', 'right']:
-                ax.spines[spine].set_visible(False)
-            for spine in ['left', 'bottom']:
-                ax.spines[spine].set_color(spine_color)
-
-            fig.subplots_adjust(left=0.12, right=0.95, top=0.90, bottom=0.28)
-
-            st.pyplot(fig, use_container_width=True, clear_figure=True)
+            st.pyplot(fig, use_container_width=True)
 
     with top2:
         st.markdown("### Countries by Active LEO Satellites")
