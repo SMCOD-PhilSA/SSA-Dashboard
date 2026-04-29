@@ -182,28 +182,28 @@ def render():
             fig1.add_annotation(
                 text="Quiet (<3)",
                 xref="paper", yref="paper",
-                x=0.02, y=1.15,
+                x=0.02, y=0.85,
                 showarrow=False,
                 font=dict(color="#00cc00", size=13)
             )
             fig1.add_annotation(
                 text="Unsettled (3–4)",
                 xref="paper", yref="paper",
-                x=0.28, y=1.15,
+                x=0.28, y=0.85,
                 showarrow=False,
                 font=dict(color="#ffcc00", size=13)
             )
             fig1.add_annotation(
                 text="Active (5–6)",
                 xref="paper", yref="paper",
-                x=0.58, y=1.15,
+                x=0.58, y=0.85,
                 showarrow=False,
                 font=dict(color="#ff9900", size=13)
             )
             fig1.add_annotation(
                 text="Storm (≥7)",
                 xref="paper", yref="paper",
-                x=0.88, y=1.15,
+                x=0.88, y=0.85,
                 showarrow=False,
                 font=dict(color="#ff3333", size=13)
             )
