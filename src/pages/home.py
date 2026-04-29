@@ -4,7 +4,6 @@ from datetime import datetime, timezone, timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-import streamlit.components.v1 as components
 
 from src.services.space_weather_api import get_daily_kp
 from src.services.spacetrack_api import get_active_leo_by_country
@@ -12,7 +11,7 @@ from src.services.launch_scraper import fetch_china_launches
 from src.services.cdm_fetcher import fetch_cdm_data
 from src.pages.auth import logout
 
-# ====================== CONFIG ======================
+# ====================== PAGE CONFIG ======================
 st.set_page_config(
     page_title="Space Dashboard",
     page_icon="🛰️",
@@ -21,11 +20,11 @@ st.set_page_config(
 )
 
 # ====================== CACHING ======================
-@st.cache_data(ttl=1800)  # 30 minutes
+@st.cache_data(ttl=1800)   # 30 minutes
 def get_kp_data():
     return get_daily_kp()
 
-@st.cache_data(ttl=3600)  # 1 hour
+@st.cache_data(ttl=3600)
 def get_leo_by_country():
     return get_active_leo_by_country()
 
@@ -33,7 +32,7 @@ def get_leo_by_country():
 def get_china_launches():
     return fetch_china_launches()
 
-@st.cache_data(ttl=600)   # 10 minutes - CDM changes faster
+@st.cache_data(ttl=600)    # 10 minutes
 def get_cdm_data():
     return fetch_cdm_data()
 
@@ -44,22 +43,21 @@ def get_base64_image(path: str) -> str:
         return base64.b64encode(f.read()).decode()
 
 def tile(title: str, image_path: str, page_key: str):
-    """Clickable image tile"""
+    """Simple clean tile"""
     img_b64 = get_base64_image(image_path)
     ext = image_path.rsplit(".", 1)[-1].lower()
     mime = "image/png" if ext == "png" else "image/jpeg"
 
     st.markdown(
         f"""
-        <div style="position: relative; border-radius: 14px; overflow: hidden; cursor: pointer;"
-             onclick="document.getElementById('btn_{page_key}').click()">
+        <div style="position: relative; border-radius: 12px; overflow: hidden; 
+                    border: 1px solid #ddd; margin-bottom: 8px;">
             <img src="data:{mime};base64,{img_b64}" 
-                 style="width:100%; height:220px; object-fit:cover; display:block;">
-            <div style="position:absolute; inset:0; 
-                        background:linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.85));"></div>
-            <div style="position:absolute; bottom:20px; left:20px; color:white; 
-                        font-size:1.35rem; font-weight:600; text-shadow: 0 2px 4px rgba(0,0,0,0.6);">
-                {title}
+                 style="width:100%; height:210px; object-fit:cover;">
+            <div style="position:absolute; bottom:0; left:0; right:0; 
+                        background:linear-gradient(transparent, rgba(0,0,0,0.75)); 
+                        padding: 20px 16px 16px;">
+                <h4 style="color:white; margin:0; font-size:1.25rem;">{title}</h4>
             </div>
         </div>
         """,
@@ -71,12 +69,14 @@ def tile(title: str, image_path: str, page_key: str):
         st.query_params["page"] = page_key
         st.rerun()
 
+
 def clean_rocket_name(text: str) -> str:
     if not text:
         return "TBD"
     for k in ["Unknown Payload", "Demo Flight", "Chang'e"]:
         text = text.replace(k, "")
     return text.strip()
+
 
 def format_hours(hours: float) -> str:
     if pd.isna(hours):
@@ -86,89 +86,60 @@ def format_hours(hours: float) -> str:
     m = total_minutes % 60
     return f"{h:02d} H {m:02d} M ago" if hours < 0 else f"in {h:02d} H {m:02d} M"
 
+
 def render_cdm_table(data: pd.DataFrame):
     st.markdown("""
     <style>
-    .cdm-wrap {
-        border-radius: 12px;
-        overflow: hidden;
-        background: white;
-        color: black;
-        border: 1px solid #ddd;
-    }
-    .cdm-header {
-        display: grid;
-        grid-template-columns: 1.3fr 1.35fr 0.9fr 0.8fr 0.8fr;
-        padding: 12px 14px;
-        font-weight: bold;
-        background: #f2f2f2;
+    .cdm-table { border-collapse: collapse; width: 100%; }
+    .cdm-table th, .cdm-table td { 
+        padding: 12px 10px; 
+        text-align: left; 
         border-bottom: 1px solid #ddd;
     }
-    .cdm-row {
-        display: grid;
-        grid-template-columns: 1.3fr 1.35fr 0.9fr 0.8fr 0.8fr;
-        padding: 12px 14px;
-        border-bottom: 1px solid #eee;
-    }
-    .cdm-cell {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+    .cdm-table th { background-color: #f8f9fa; font-weight: 600; }
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class="cdm-wrap">
-        <div class="cdm-header">
-            <div>PRIMARY OBJECT</div>
-            <div>SECONDARY OBJECT</div>
-            <div>TCA</div>
-            <div>PC</div>
-            <div>MD (M)</div>
-        </div>
-    """, unsafe_allow_html=True)
+    html = '<table class="cdm-table"><thead><tr>'
+    headers = ["Primary Object", "Secondary Object", "TCA", "Pc", "Miss Distance (m)"]
+    for h in headers:
+        html += f"<th>{h}</th>"
+    html += "</tr></thead><tbody>"
 
     for _, row in data.iterrows():
-        st.markdown(
-            f"""
-            <div class="cdm-row">
-                <div class="cdm-cell">{row['Primary_Object']}</div>
-                <div class="cdm-cell">{row['Secondary_Object']}</div>
-                <div class="cdm-cell">{format_hours(row['HOURS_TO_TCA'])}</div>
-                <div class="cdm-cell">{row['Pc']:.2e}</div>
-                <div class="cdm-cell">{int(row['Miss_Distance'])}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        html += f"""
+        <tr>
+            <td>{row['Primary_Object']}</td>
+            <td>{row['Secondary_Object']}</td>
+            <td>{format_hours(row['HOURS_TO_TCA'])}</td>
+            <td>{row['Pc']:.2e}</td>
+            <td>{int(row['Miss_Distance'])}</td>
+        </tr>
+        """
+    html += "</tbody></table>"
+    st.markdown(html, unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # ====================== MAIN RENDER ======================
-
 def render():
     user = st.session_state.get("user", {})
     name = user.get("displayName", "User")
     email = user.get("mail") or user.get("userPrincipalName", "")
 
-    # Theme handling
     if "theme" not in st.session_state:
         st.session_state["theme"] = "dark"
 
     is_dark = st.session_state["theme"] == "dark"
     toggle_label = "☀️ Light Mode" if is_dark else "🌙 Dark Mode"
 
+    # Header
     col1, col2, col3 = st.columns([6, 2, 2])
-
     with col1:
         st.markdown(f"**{name}**  \n{email}")
-
     with col2:
         if st.button(toggle_label, use_container_width=True):
             st.session_state["theme"] = "light" if is_dark else "dark"
             st.rerun()
-
     with col3:
         if st.button("Sign Out", use_container_width=True):
             logout()
@@ -176,8 +147,7 @@ def render():
 
     st.divider()
 
-    # ====================== DASHBOARD CHARTS ======================
-
+    # ====================== DASHBOARD ======================
     top1, top2 = st.columns(2)
 
     with top1:
@@ -192,26 +162,16 @@ def render():
                 x="Day",
                 y="Kp Index",
                 color="Kp Index",
-                color_continuous_scale=["#00cc00", "#ffcc00", "#ff9900", "#ff3333"],
+                color_continuous_scale=["green", "yellow", "orange", "red"],
                 range_color=[0, 9],
-                height=400
+                height=380,
             )
-
-            fig.update_traces(texttemplate="%{y:.1f}", textposition="outside", marker_line_width=0)
             fig.update_layout(
-                yaxis_title="Kp Index",
                 yaxis_range=[0, 9.5],
                 xaxis_tickangle=-30,
-                margin=dict(l=40, r=20, t=40, b=80),
+                margin=dict(t=20, b=60),
                 coloraxis_showscale=False,
             )
-
-            # Legend annotations
-            fig.add_annotation(text="Quiet (<3)", xref="paper", yref="paper", x=0.05, y=1.12, showarrow=False, font=dict(color="#00cc00"))
-            fig.add_annotation(text="Unsettled (3–4)", xref="paper", yref="paper", x=0.32, y=1.12, showarrow=False, font=dict(color="#ffcc00"))
-            fig.add_annotation(text="Active (5–6)", xref="paper", yref="paper", x=0.62, y=1.12, showarrow=False, font=dict(color="#ff9900"))
-            fig.add_annotation(text="Storm (≥7)", xref="paper", yref="paper", x=0.88, y=1.12, showarrow=False, font=dict(color="#ff3333"))
-
             st.plotly_chart(fig, use_container_width=True)
 
     with top2:
@@ -228,18 +188,12 @@ def render():
                 orientation='h',
                 color="Satellites",
                 color_continuous_scale=px.colors.sequential.Blues_r,
-                height=400,
+                height=380,
             )
-
-            fig2.update_layout(
-                xaxis_title="Number of Active LEO Satellites",
-                yaxis_title=None,
-                margin=dict(l=20, r=20, t=40, b=60),
-            )
-
+            fig2.update_layout(margin=dict(t=20, b=40))
             st.plotly_chart(fig2, use_container_width=True)
 
-    # Bottom Section
+    # Bottom Row
     bottom1, bottom2 = st.columns(2)
 
     with bottom1:
@@ -253,16 +207,13 @@ def render():
                 site = launch.get("site") or "TBD"
 
                 st.markdown(f"""
-                <div style="padding: 16px; border-radius: 10px; 
-                            background-color: {'#1e1e1e' if is_dark else '#f8f9fa'}; 
-                            border-left: 5px solid #00b4d8; margin-bottom: 12px;">
-                    <strong>{rocket}</strong><br>
-                    <span style="color: #888; font-size: 0.95rem;">{date}</span><br>
-                    <small style="color: #666;">{site}</small>
-                </div>
-                """, unsafe_allow_html=True)
+                    **{rocket}**  
+                    {date}  
+                    :gray[{site}]
+                    ---
+                """)
         else:
-            st.info("No upcoming launches found.")
+            st.info("No upcoming launches data available.")
 
     with bottom2:
         st.subheader("High Risk Conjunctions")
@@ -278,7 +229,6 @@ def render():
 
             now = datetime.now(timezone.utc).replace(tzinfo=None)
             df["HOURS_TO_TCA"] = (df["TCA_UTC"] - now).dt.total_seconds() / 3600
-
             df = df[df["TCA_UTC"] >= (now - timedelta(days=7))]
 
             tab1, tab2, tab3 = st.tabs(["Nearest TCA", "Highest PC", "Lowest MD"])
@@ -295,14 +245,14 @@ def render():
     # Navigation Tiles
     st.divider()
 
-    t1, t2 = st.columns(2)
-    with t1:
+    col_tile1, col_tile2 = st.columns(2)
+    with col_tile1:
         tile("Space Weather Monitoring", "graphics/space_weather.jpg", "space_weather")
-    with t2:
+    with col_tile2:
         tile("Orbital Debris Reentry", "graphics/reentry.jpg", "reentry")
 
-    t3, t4 = st.columns(2)
-    with t3:
+    col_tile3, col_tile4 = st.columns(2)
+    with col_tile3:
         tile("Conjunction Analysis", "graphics/cdm.png", "cdm")
-    with t4:
+    with col_tile4:
         tile("Rocket Launch Monitoring", "graphics/rocket.jpg", "rocket")
