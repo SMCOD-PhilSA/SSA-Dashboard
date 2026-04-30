@@ -1,11 +1,10 @@
-
-
 import math
 import time
 from datetime import datetime, timezone, timedelta
 
 import requests
 import streamlit as st
+from src.services.space_weather_api import get_daily_kp
 
 # ── optional deps ─────────────────────────────────────────────────────────────
 try:
@@ -23,7 +22,10 @@ except ImportError:
 # ── constants ─────────────────────────────────────────────────────────────────
 NOAA_AURORA_NORTH   = "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg"
 NOAA_AURORA_SOUTH   = "https://services.swpc.noaa.gov/images/animations/ovation/south/latest.jpg"
-KP_FORECAST_URL     = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"
+# Real-time observed Kp (1-min cadence) — same source as home.py
+KP_1MIN_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+# Forecast (used for the 24h chart only)
+KP_FORECAST_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"
 SPACETRACK_LOGIN   = "https://www.space-track.org/ajaxauth/login"
 SPACETRACK_TLE_URL = "https://www.space-track.org/basicspacedata/query/class/gp/OBJECT_NAME/{name}/orderby/EPOCH%20desc/limit/1/format/tle"
 
@@ -71,8 +73,31 @@ def effect_severity(effect_name: str, kp: float):
 
 
 # ── data fetching ─────────────────────────────────────────────────────────────
+@st.cache_data(ttl=60)   # 1-min cache — matches the data update cadence
+def fetch_kp_realtime():
+    """
+    Fetch the latest OBSERVED Kp index from NOAA (1-min cadence).
+    Same source used by home.py via get_daily_kp().
+    Returns list of (datetime_utc, kp_float) — most recent last.
+    """
+    try:
+        r = requests.get(KP_1MIN_URL, timeout=10)
+        r.raise_for_status()
+        rows = []
+        for item in r.json()[1:]:   # skip header row
+            try:
+                dt  = datetime.strptime(item[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                rows.append((dt, float(item[1])))
+            except Exception:
+                pass
+        return rows
+    except Exception:
+        return []
+
+
 @st.cache_data(ttl=300)
 def fetch_kp_forecast():
+    """Fetch Kp forecast — used only for the 24h chart."""
     try:
         r = requests.get(KP_FORECAST_URL, timeout=10)
         r.raise_for_status()
@@ -84,8 +109,32 @@ def fetch_kp_forecast():
             except Exception:
                 pass
         return rows
-    except Exception as e:
+    except Exception:
         return []
+
+
+def get_current_kp() -> float:
+    """
+    Get the most recent OBSERVED Kp value.
+    Falls back to get_daily_kp() (same as home.py) if real-time fetch fails.
+    """
+    rt_rows = fetch_kp_realtime()
+    if rt_rows:
+        # most recent observed value
+        now  = datetime.now(timezone.utc)
+        past = [(dt, kp) for dt, kp in rt_rows if dt <= now]
+        if past:
+            return past[-1][1]
+        return rt_rows[-1][1]
+
+    # fallback — use the same daily Kp source as home.py
+    try:
+        days, values = get_daily_kp()
+        if values:
+            return values[-1]   # today's most recent bar
+    except Exception:
+        pass
+    return 0.0
 
 
 import http.cookiejar as _cookiejar
@@ -602,10 +651,10 @@ def render():
             st.rerun()
 
     # ── fetch Kp (always runs) ────────────────────────────────────────────────
+    # curr_kp = latest OBSERVED value (1-min cadence, same source as home.py)
+    # kp_rows = forecast data used only for the 24h chart
+    curr_kp = get_current_kp()
     kp_rows = fetch_kp_forecast()
-    now     = datetime.now(timezone.utc)
-    past_kp = [(dt, kp) for dt, kp in kp_rows if dt <= now]
-    curr_kp = past_kp[-1][1] if past_kp else (kp_rows[0][1] if kp_rows else 2.0)
 
     # ── top Kp strip ──────────────────────────────────────────────────────────
     render_kp_strip(curr_kp, is_dark)
